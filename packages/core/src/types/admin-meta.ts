@@ -75,7 +75,7 @@ export type FieldController<
   }
 }
 
-// TODO: duplicate, reference core/src/lib/admin-meta.ts
+// Hydrated client metadata. Query and server types derive their shared fields from this type.
 export type FieldMeta = {
   key: string
   label: string
@@ -131,7 +131,7 @@ export type ActionMeta = {
     }[]
     names: {
       one: string
-      many: string
+      many: string | null
     }
   }
 
@@ -186,7 +186,7 @@ export type ListMeta = {
   pageSize: number
   initialColumns: string[]
   initialSearchFields: string[]
-  initialSort: ListSortDescriptor<string>
+  initialSort: ListSortDescriptor<string> | null
   initialFilter: JSONValue
   hiddenFilter: JSONValue | null
   isSingleton: boolean

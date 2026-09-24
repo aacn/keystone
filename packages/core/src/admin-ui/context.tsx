@@ -5,7 +5,7 @@ import { ClientSideOnlyDocumentElement, KeystarProvider } from '@keystar/ui/core
 import { injectGlobal, tokenSchema } from '@keystar/ui/style'
 import { Toaster } from '@keystar/ui/toast'
 
-import { snapValueToClosest } from './pages/ListPage/PaginationControls.tsx'
+import { hydrateAdminMeta } from './hydrate-admin-meta.ts'
 import type {
   AdminConfig,
   BaseListTypeInfo,
@@ -52,9 +52,6 @@ type KeystoneProviderProps = {
   children: ReactNode
 }
 
-const requiredExports = new Set(['Field', 'controller'])
-const overridableExports = new Set([...requiredExports, 'Cell'])
-
 function InternalKeystoneProvider({
   adminConfig,
   apiPath,
@@ -89,97 +86,7 @@ function InternalKeystoneProvider({
     if (!listsData) return
     if (error) return
 
-    const lists: KeystoneContextType['lists'] = {}
-
-    for (const listData of listsData) {
-      lists[listData.key] = {
-        ...listData,
-        pageSize: snapValueToClosest(listData.pageSize ?? 50),
-        fields: {},
-        groups: [],
-      }
-
-      function hydrateField(field: (typeof listData.fields)[number]) {
-        for (const exportName of requiredExports) {
-          if ((fieldViews[field.viewsIndex] as any)[exportName] === undefined) {
-            throw new Error(
-              `The view for the field at ${listData.key}.${field.key} is missing the ${exportName} export`
-            )
-          }
-        }
-
-        const views = { ...fieldViews[field.viewsIndex] }
-        const customViews: Record<string, any> = {}
-        if (field.customViewsIndex !== null) {
-          const customViewsSource: FieldViews[number] & Record<string, any> =
-            fieldViews[field.customViewsIndex]
-          const allowedExportsOnCustomViews = new Set(views.allowedExportsOnCustomViews)
-          for (const exportName in customViewsSource) {
-            if (allowedExportsOnCustomViews.has(exportName)) {
-              customViews[exportName] = customViewsSource[exportName]
-            } else if (overridableExports.has(exportName)) {
-              ;(views as any)[exportName] = customViewsSource[exportName]
-            }
-          }
-        }
-
-        return {
-          ...field,
-          createView: {
-            fieldMode: field.createView?.fieldMode ?? 'edit',
-            isRequired: field.createView?.isRequired ?? false,
-          },
-          itemView: {
-            fieldMode: field.itemView?.fieldMode ?? null,
-            fieldPosition: field.itemView?.fieldPosition ?? null,
-            isRequired: field.itemView?.isRequired ?? false,
-          },
-          listView: {
-            fieldMode: field.listView?.fieldMode ?? null,
-          },
-          views,
-          controller: views.controller({
-            listKey: listData.key,
-            fieldKey: field.key,
-            label: field.label,
-            description: field.description,
-            fieldMeta: field.fieldMeta,
-            customViews,
-          }),
-        }
-      }
-
-      for (const field of listData.fields) {
-        lists[listData.key].fields[field.key] = hydrateField(field)
-      }
-
-      for (const group of listData.groups) {
-        lists[listData.key].groups.push({
-          label: group.label,
-          description: group.description,
-          fields: group.fields.map(field => lists[listData.key].fields[field.key]),
-        })
-      }
-
-      lists[listData.key].actions = listData.actions.map(action => ({
-        ...action,
-        graphql: {
-          ...action.graphql,
-          arguments: action.graphql.arguments.map(arg =>
-            arg.source && 'field' in arg.source
-              ? {
-                  ...arg,
-                  source: {
-                    field: hydrateField(arg.source.field as (typeof listData.fields)[number]),
-                  },
-                }
-              : arg
-          ),
-        },
-      }))
-    }
-
-    return lists
+    return hydrateAdminMeta(listsData, fieldViews)
   }, [listsData, error, fieldViews])
 
   // TODO: remove this once studio is fully migrated to keystar-ui
